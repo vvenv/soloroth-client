@@ -437,6 +437,8 @@ fn launch(build: BuildId, extend: Option<Extension<'_>>) -> AppExit {
     .add_plugins(benilla_world::mac_quit::MacQuitPlugin)
     // Alt+F4 on Windows and Linux, where a tiling window manager binds nothing to it.
     .add_plugins(shutdown::AltF4Plugin)
+    // A quit on macOS could hang on the render thread; the render world comes home first.
+    .add_plugins(shutdown::RenderHomePlugin)
     // The engine as one group; `world_plugins.rs` has its load-bearing ordering edges and what it
     // leaves out (`pipe_warm`).
     .add_plugins(benilla_world::world_plugins::WorldPlugins)

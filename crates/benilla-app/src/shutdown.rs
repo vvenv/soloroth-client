@@ -45,6 +45,57 @@ pub(crate) fn on_app_exit(app: &mut App, systems: ScheduleConfigs<ScheduleSystem
     app.add_systems(Last, systems.in_set(OnAppExit))
 }
 
+/// Brings the render world home on the exit frame, so the teardown cannot deadlock on macOS.
+///
+/// With pipelined rendering the render world lives on the render thread, and bevy_winit's
+/// `exiting` drops `RenderAppChannels`, which blocks the main thread until that world comes back.
+/// On macOS the render schedule has main-thread systems (surface creation), so a render frame
+/// still in flight then waits on the main thread while the main thread waits on it, and the quit
+/// hangs with the window frozen. Here the main thread waits for the frame while still serving
+/// its executor, then parks the render world in a loopback channel: a later extract (macOS can
+/// run one more `Main` pass) finds it at once, and the drop takes it back without waiting on
+/// anyone. The old channels close as they drop, which ends the render thread.
+pub(crate) struct RenderHomePlugin;
+
+impl Plugin for RenderHomePlugin {
+    fn build(&self, app: &mut App) {
+        #[cfg(target_os = "macos")]
+        on_app_exit(app, bring_render_world_home.into_configs());
+        #[cfg(not(target_os = "macos"))]
+        let _ = app;
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn bring_render_world_home(world: &mut World) {
+    use bevy::ecs::schedule::MainThreadExecutor;
+    use bevy::render::pipelined_rendering::RenderAppChannels;
+    use bevy::tasks::ComputeTaskPool;
+
+    let Some(executor) = world.get_resource::<MainThreadExecutor>().cloned() else {
+        return;
+    };
+    // Absent when headless or with pipelined rendering off: nothing lives on another thread.
+    let Some(mut channels) = world.remove_resource::<RenderAppChannels>() else {
+        return;
+    };
+    let render_app = ComputeTaskPool::get()
+        .scope_with_executor(true, Some(&*executor.0), |scope| {
+            scope.spawn(async { channels.recv().await });
+        })
+        .pop()
+        .flatten();
+    let Some(render_app) = render_app else {
+        // The render thread panicked; the stock channels already report that and never block.
+        world.insert_resource(channels);
+        return;
+    };
+    let (sender, receiver) = async_channel::bounded(1);
+    let mut parked = RenderAppChannels::new(sender, receiver);
+    parked.send_blocking(render_app);
+    world.insert_resource(parked);
+}
+
 /// Alt+F4 closes the primary window on Windows and Linux.
 ///
 /// Deviation: the reference leaves it to the OS. Its key arm (`0x42d261`-`0x42d276`) hands Alt+F4

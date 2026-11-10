@@ -89,6 +89,8 @@ smithay-clipboard = "0.7"
 
 # A native NSCursor: winit's cursor rects revert to the arrow under a continuous render loop.
 [target.'cfg(target_os = "macos")'.dependencies]
+# The loopback channel that parks the render world on exit (`shutdown`), at bevy_render's version.
+async-channel = "2"
 # The audio device layer (`sound::output::coreaudio`), at the versions and features cpal uses.
 coreaudio-rs = { version = "0.13", default-features = false, features = ["audio_unit", "core_audio"] }
 objc2-core-audio = { version = "0.3", default-features = false, features = ["std", "AudioHardware"] }

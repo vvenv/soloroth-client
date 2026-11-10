@@ -500,6 +500,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "assert_no_alloc",
+ "async-channel",
  "avian3d",
  "benilla-assets",
  "benilla-formats",
