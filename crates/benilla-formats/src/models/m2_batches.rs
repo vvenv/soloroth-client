@@ -56,11 +56,15 @@ fn resolve_texture(
         M2TextureType::Other(8) => Some(CharSkinSlot::SkinExtra),
         _ => None,
     };
-    // The skin slot is reported so a skin-less load can fill it at spawn.
+    // The skin slot is reported so a skin-less load can fill it at spawn. A replaceable slot never
+    // reads the record's filename (the reference resolves types 11-13 from the display's skins
+    // alone): a model repacked by a texture mod can leave a stray byte there (`FelBat.m2` in a
+    // common HD pack: one-byte names `0xa8`, `0xa0`), and loading that as a path left the batch
+    // waiting on a texture that never lands, the whole creature unseen.
     match tex.texture_type {
-        M2TextureType::Monster1 => (variation(0).or(embedded), Some(0), None, false),
-        M2TextureType::Monster2 => (variation(1).or(embedded), Some(1), None, false),
-        M2TextureType::Monster3 => (variation(2).or(embedded), Some(2), None, false),
+        M2TextureType::Monster1 => (variation(0), Some(0), None, false),
+        M2TextureType::Monster2 => (variation(1), Some(1), None, false),
+        M2TextureType::Monster3 => (variation(2), Some(2), None, false),
         _ => (embedded, None, char_slot, icon_slot),
     }
 }
