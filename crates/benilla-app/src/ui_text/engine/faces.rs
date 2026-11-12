@@ -13,10 +13,17 @@ pub(super) const CLIENT_FONTS: &[&str] = &[
     "Fonts\\SKURRI.TTF",
 ];
 
+/// Faces asked for a character the requested face lacks, in order: the CJK fonts the zhCN, zhTW
+/// and koKR clients ship in their own `fonts.MPQ`, so a Chinese install draws Chinese in every
+/// face, Friz included (3-D unit names, which the reference draws in the locale's
+/// `UNIT_NAME_FONT`, take the default face here). Those that the install lacks are skipped.
 pub(super) const FALLBACK_FONTS: &[&str] = &[
-    "Interface\\AddOns\\HordesOfAzeroth\\Fonts\\NotoSansSC-Regular.otf",
-    "Interface\\AddOns\\HordesOfAzeroth\\Fonts\\NotoSansTC-Regular.otf",
-    "Interface\\AddOns\\HordesOfAzeroth\\Fonts\\NotoSansKR-Regular.otf",
+    "Fonts\\FZXHLJW.TTF",
+    "Fonts\\FZBWJW.TTF",
+    "Fonts\\FZLBJW.TTF",
+    "Fonts\\bHEI00M.ttf",
+    "Fonts\\bHEI01B.ttf",
+    "Fonts\\2002.TTF",
 ];
 
 /// The face's ascender as a fraction of the em, `hhea.asc / (hhea.asc + |hhea.desc|)`, off the raw
