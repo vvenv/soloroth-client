@@ -619,21 +619,19 @@ mod tests {
     fn the_snaps_are_in_device_pixels() {
         let p = placement(Vec2::new(1512.0, 982.0), true, 2.0);
         assert_eq!(p.shadow, Vec2::new(1.5, 1.0));
-        // The column's left edge is 756 − 658.5/2 = 426.75 logical, 853.5 device px, floored.
-        let area = crate::loading_screen::fit_rect(Vec2::new(1512.0, 982.0), true);
-        assert!(near(p.left + area.x, 426.5), "{}", p.left + area.x);
-        // 196.4 device px above the window's bottom, floored; the window is the area's height.
+        // Soloroth: the content area is the window, so left is already window-relative.
+        assert!(near(p.left, 426.5), "{}", p.left);
+        // 196.4 device px above the window's bottom, floored.
         assert_eq!(p.bottom, 98.0);
     }
 
-    /// Wider than 4:3 the area is pillarboxed and the tip is the same size and height as in a 4:3
-    /// window of that height (`s·W = 515·H/768`), centred on the window.
+    /// Wider than 4:3 the tip is the same size as in a 4:3 window of that height
+    /// (`s·W = 515·H/768`), centred on the (full) window.
     #[test]
     fn a_wide_window_keeps_the_tip_of_its_height() {
         let p = placement(Vec2::new(1920.0, 1080.0), true, 1.0);
         assert!(near(p.width, 515.0 * 1080.0 / 768.0));
-        // Area x = 240; the column is centred on the window, 960, its 597.89 floored.
-        assert!(near(p.left + 240.0, (960.0 - p.width / 2.0).floor()));
+        assert!(near(p.left, (960.0 - p.width / 2.0).floor()));
         assert!(near(p.bottom, 108.0));
         assert!(near(p.font_size, 19.44));
     }
@@ -648,17 +646,16 @@ mod tests {
         assert!(near(p.bottom, 102.0), "0.1 of the height, floored");
     }
 
-    /// Narrower than 4:3 the area is letterboxed and the tip is laid out in window terms: its
-    /// width and type are fractions of the window height, and its baseline sits `yoff` plus 0.1 of
-    /// the window height above the window's bottom, which is 0.1 of the height above the area's.
+    /// Narrower than 4:3 the tip is laid out in window terms: its width and type are fractions of
+    /// the window height, and its baseline sits `yoff` plus 0.1 of the window height above the
+    /// bottom. Soloroth's content area is the whole window (no letterbox band to subtract).
     #[test]
     fn a_tall_window_lays_the_tip_out_in_window_terms() {
-        // 1280x1024: a = 0.9375, the area 1280x960 at y = 32.
+        // 1280x1024: a = 0.9375, yoff = 0.03125 → from_window_bottom = 0.13125·1024.
         let p = placement(Vec2::new(1280.0, 1024.0), true, 1.0);
         assert!(near(p.width, 515.0 * 1024.0 / 768.0), "{}", p.width);
         assert!(near(p.left, (640.0 - p.width / 2.0).floor()), "area x is 0");
-        // `0.13125·1024 = 134.4` above the window's bottom, floored, less the 32 px band.
-        assert!(near(p.bottom, 102.0), "{}", p.bottom);
+        assert!(near(p.bottom, 134.0), "{}", p.bottom);
         assert!(near(p.font_size, 18.432));
         assert_eq!(p.shadow, Vec2::ONE);
     }

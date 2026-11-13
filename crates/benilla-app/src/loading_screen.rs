@@ -86,27 +86,19 @@ pub(crate) struct FitRect {
 }
 
 /// The viewport the paint callback `0x406a60` installs (`0x58af60` at `0x406b3d`) for a window of
-/// this size, which the art, the bar and the tip are drawn in. Wider than 4:3 (`a > 1`,
-/// `0x406ac9`-`0x406ad4`) it is `1/a` of the width, centred; narrower (`a < 1`, `0x406af7`-
-/// `0x406b02`) it is `a` of the height, centred; at exactly 4:3, or with no usable aspect, the
-/// whole window (`0x406b02` keeps the defaults for `a == 1` and a NaN). The edges are fractions of
-/// the window, `(1 − extent) · 0.5` from the near side.
+/// this size, which the art, the bar and the tip are drawn in.
+///
+/// Soloroth deviation: the reference pillarboxes / letterboxes to a 4:3 content area when
+/// `widescreen` is on (`0x406ac9`–`0x406b02`). Here the area is always the whole window so the
+/// 16:9 HD loading BLPs in `Data/patch-L.MPQ` fill edge to edge; `widescreen` still drives the
+/// tip's wrap via [`scaled_aspect`].
 pub(crate) fn fit_rect(window: Vec2, widescreen: bool) -> FitRect {
-    let a = scaled_aspect(window, widescreen);
-    let (mut left, mut bottom, mut across, mut up) = (0.0, 0.0, 1.0, 1.0);
-    if a > 1.0 {
-        across = 1.0 / a;
-        left = (1.0 - across) * 0.5;
-    } else if a < 1.0 {
-        up = a;
-        bottom = (1.0 - up) * 0.5;
-    }
-    // The bands above and below are equal, so the bottom edge is also the top edge's distance.
+    let _ = widescreen;
     FitRect {
-        x: left * window.x,
-        y: bottom * window.y,
-        width: across * window.x,
-        height: up * window.y,
+        x: 0.0,
+        y: 0.0,
+        width: window.x,
+        height: window.y,
     }
 }
 /// Consecutive fully resident frames before the clear: debounces the post-teleport frame where
@@ -905,16 +897,13 @@ mod tests {
         );
     }
 
-    /// `0x406a60`: `a > 1` is `1/a` of the width, `a < 1` is `a` of the height, each centred, and
-    /// exactly 4:3 is the whole window.
+    /// Soloroth fills the window at every aspect (HD 16:9 art); the reference would pillarbox /
+    /// letterbox to 4:3 when `widescreen` is on.
     #[test]
-    fn the_picture_is_fit_inside_the_window_in_both_directions() {
-        // Wider than 4:3: pillarboxed, full height.
-        close(fit(1920.0, 1080.0), [240.0, 0.0, 1440.0, 1080.0]);
-        // Narrower: letterboxed, full width, 3/4 of it tall.
-        close(fit(1280.0, 1024.0), [0.0, 32.0, 1280.0, 960.0]);
-        close(fit(600.0, 1000.0), [0.0, 275.0, 600.0, 450.0]);
-        // 4:3: the window.
+    fn the_picture_fills_the_window() {
+        close(fit(1920.0, 1080.0), [0.0, 0.0, 1920.0, 1080.0]);
+        close(fit(1280.0, 1024.0), [0.0, 0.0, 1280.0, 1024.0]);
+        close(fit(600.0, 1000.0), [0.0, 0.0, 600.0, 1000.0]);
         close(fit(1024.0, 768.0), [0.0, 0.0, 1024.0, 768.0]);
         close(fit(800.0, 600.0), [0.0, 0.0, 800.0, 600.0]);
     }
@@ -964,8 +953,7 @@ mod tests {
         close(fit(0.0, 0.0), [0.0; 4]);
     }
 
-    /// The system sizes the node the loading screen spawns from the primary window each frame, so
-    /// a window resized tall during a load letterboxes it.
+    /// The system sizes the node the loading screen spawns from the primary window each frame.
     #[test]
     fn the_content_area_follows_the_window() {
         let mut app = App::new();
@@ -986,14 +974,14 @@ mod tests {
             (n.width, n.height)
         };
         app.update();
-        assert_eq!(size(&app), (Val::Px(1280.0), Val::Px(960.0)));
+        assert_eq!(size(&app), (Val::Px(1280.0), Val::Px(1024.0)));
         app.world_mut()
             .get_mut::<Window>(window)
             .unwrap()
             .resolution
             .set(1920.0, 1080.0);
         app.update();
-        assert_eq!(size(&app), (Val::Px(1440.0), Val::Px(1080.0)));
+        assert_eq!(size(&app), (Val::Px(1920.0), Val::Px(1080.0)));
     }
 
     #[test]
