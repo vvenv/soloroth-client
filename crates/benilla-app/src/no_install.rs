@@ -31,9 +31,9 @@ impl NoInstall {
     /// no folder, as the reference's `0x4038ef` and `0x403b6f` are for a base archive.
     pub(crate) fn unreadable(data_dir: &std::path::Path, err: &anyhow::Error) -> Self {
         Self {
-            title: "benilla: the WoW install cannot be read",
+            title: "Soloroth: the WoW install cannot be read",
             message: format!(
-                "benilla found a World of Warcraft install at\n  {}\nbut cannot read its archives:\n  \
+                "Soloroth found a World of Warcraft install at\n  {}\nbut cannot read its archives:\n  \
                  {err:#}\n\nCheck that this is an unmodified 1.12.1 Data folder.",
                 data_dir.display()
             ),
@@ -45,7 +45,7 @@ impl NoInstall {
 /// and `looked_in` its [`benilla_formats::candidates`], named in order in the message.
 pub(crate) fn require(found: Option<PathBuf>, looked_in: &[PathBuf]) -> Result<PathBuf, NoInstall> {
     found.ok_or_else(|| NoInstall {
-        title: "benilla: no WoW install found",
+        title: "Soloroth: no WoW install found",
         message: message(looked_in),
     })
 }
@@ -53,7 +53,7 @@ pub(crate) fn require(found: Option<PathBuf>, looked_in: &[PathBuf]) -> Result<P
 /// What to tell the player: the folders searched and the two ways to supply an install.
 fn message(looked_in: &[PathBuf]) -> String {
     let mut out =
-        String::from("benilla needs a World of Warcraft 1.12.1 install and found none.\n");
+        String::from("Soloroth needs a World of Warcraft 1.12.1 install and found none.\n");
     if looked_in.is_empty() {
         // `$WOW_DATA` set and empty ends the search with nothing in it.
         out.push_str("\nWOW_DATA is set and empty, which means no install.\n");
@@ -64,7 +64,7 @@ fn message(looked_in: &[PathBuf]) -> String {
         }
     }
     out.push_str(
-        "\nPut the install's Data folder at Data/ or WoW/Data/ beside the benilla binary, \
+        "\nPut the install's Data folder at Data/ or WoW/Data/ beside the program, \
          or point WOW_DATA at it.",
     );
     out
@@ -73,7 +73,7 @@ fn message(looked_in: &[PathBuf]) -> String {
 /// Report `err` and end the boot with a failing exit: stderr always, the dialog too unless the run
 /// is `unattended`, so an instrumented run never waits on a click.
 pub(crate) fn fail(err: &NoInstall, unattended: bool) -> AppExit {
-    eprintln!("benilla: {}", err.message());
+    eprintln!("Soloroth: {}", err.message());
     if !unattended {
         // Linux shows it through `zenity` and logs nothing when that is missing, which stderr covers.
         rfd::MessageDialog::new()
@@ -165,6 +165,6 @@ mod tests {
             .message()
             .contains("/games/benilla/Data\nbut cannot read"));
         assert!(err.message().contains("no known vanilla MPQs"));
-        assert_ne!(err.title, "benilla: no WoW install found");
+        assert_ne!(err.title, "Soloroth: no WoW install found");
     }
 }
