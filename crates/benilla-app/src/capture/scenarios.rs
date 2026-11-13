@@ -846,8 +846,7 @@ pub(super) const ON_DEMAND: &[Scenario] = &[
         minute: 720,
         ui: Some(UiFixture::Social),
     },
-    // The backdrop is whatever `Map.dbc` and `LoadingScreens.dbc` give this map, so the shot covers
-    // the art chain and the bar as well as the tip.
+    // The plain black cover with its bar and tip.
     Scenario {
         name: "loading-tip",
         map: Some(MAP_AZEROTH),

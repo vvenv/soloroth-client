@@ -1,7 +1,10 @@
-//! The loading screen: the full-screen splash and progress bar over world entry and cross-map
-//! teleports. The art resolves `Map.dbc` → `LoadingScreens.dbc` → BLP for every map kind; the bar
-//! is two layers, `Loading-BarBorder` and `Loading-BarFill` (Background, Glow and Glass are never
-//! drawn in 1.12).
+//! The loading screen: the full-screen cover and progress bar over world entry and cross-map
+//! teleports.
+//!
+//! Deviation: the cover is plain black with a thin flat bar, where the reference paints the map's
+//! art (`Map.dbc` → `LoadingScreens.dbc` → BLP, resolved in `0x406e20`) under the two-layer
+//! `Loading-BarBorder` / `Loading-BarFill` bar (`0x406891`), because Soloroth wants a quiet cover:
+//! the 512×512 art is soft on a modern window and pillarboxed on a wide one.
 //!
 //! Event-raised, as in the reference: it rises at the character pick's `Connected` edge and at
 //! `SMSG_TRANSFER_PENDING` (`0x406640`, and `0x4072c0` for a transport, whose screen is the leg's
@@ -16,13 +19,8 @@
 //! body reaching the ground.
 
 use bevy::prelude::*;
-use std::collections::HashMap;
 
-use benilla_formats::{load_loading_screens, LoadingScreenCatalog};
-
-use benilla_assets::LockRecover;
-use benilla_assets::MapCatalogRes;
-use benilla_assets::{AssetSet, LooseOpen, WorldAssets};
+use benilla_assets::{AssetSet, WorldAssets};
 use benilla_world::schedule::WorldStage;
 use benilla_world::terrain_stream::WorldLoadProgress;
 
@@ -34,18 +32,16 @@ pub(crate) mod hold;
 /// A transport transfer's route screen.
 mod route;
 
-// The bar, from the `LoadingScreen.cpp` descriptor table at `0x7ffd34` (read by `0x407150`):
-// entry {cx, cy, halfW, halfH}, rect [cx ± halfW·0.5] × [cy ± halfH·0.5], fill right edge
-// left + progress·halfW; Border {0.5, 0.075, 0.600, 0.050}, Fill {0.5, 0.075, 0.525, 0.025}.
-// Viewport fractions, `cy` measured up from the bottom edge (Bevy UI `bottom:`).
-const BORDER_LEFT: f32 = 0.200; // 0.5 − 0.600·0.5
-const BORDER_WIDTH: f32 = 0.600;
-const BORDER_BOTTOM: f32 = 0.050; // 0.075 − 0.050·0.5
-const BORDER_HEIGHT: f32 = 0.050;
-const FILL_LEFT: f32 = 0.2375; // 0.5 − 0.525·0.5
-const FILL_BOTTOM: f32 = 0.0625; // 0.075 − 0.025·0.5
-const FILL_HEIGHT: f32 = 0.025;
+// The bar keeps the reference fill's span and centre line (descriptor table `0x7ffd34`, read by
+// `0x407150`: Fill {cx 0.5, cy 0.075, halfW 0.525}), drawn as a thin track and fill. Viewport
+// fractions, `bottom` measured up from the bottom edge (Bevy UI `bottom:`).
+const BAR_LEFT: f32 = 0.2375; // 0.5 − 0.525·0.5
+const BAR_HEIGHT: f32 = 0.004;
+const BAR_BOTTOM: f32 = 0.075 - BAR_HEIGHT * 0.5;
 const FILL_MAX_WIDTH: f32 = 0.525; // halfW; fill width = progress · FILL_MAX_WIDTH
+const TRACK_COLOR: Color = Color::srgba(1.0, 1.0, 1.0, 0.12);
+/// The tip's gold, `|cffffd100`.
+const FILL_COLOR: Color = Color::srgb(1.0, 0.82, 0.0);
 
 /// The factor `0x41ad10` applies to the display aspect (`0x8012cc`): the picture is authored 4:3, so
 /// `a = 0.75 · width/height` is 1.0 at 4:3 and the fit below turns on it.
@@ -167,10 +163,6 @@ fn count_entry_cover(
     cover.tick(screen.covering() && in_world);
 }
 
-/// The `LoadingScreenID` → BLP path table; [`MapCatalogRes`] maps a map to its `LoadingScreenID`.
-#[derive(Resource)]
-struct LoadingScreenCatalogRes(LoadingScreenCatalog);
-
 /// What a raise means for the tip of the day.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum TipEdge {
@@ -204,10 +196,6 @@ pub(crate) struct LoadingScreen {
     /// `Player::LoadFromDB` (`Player.cpp:15020`), under a live screen. Its writers: `0x4067e6` and
     /// `0x4072d3` store a map id, `0x406d0e`, `0x4073d4` and `0x407e59` store `-1`.
     map: Option<u32>,
-    /// The reference's `[0x882e04]` texture handle, which latches the art: `0x406cf0` reads the map
-    /// id only to reject `-1`, and `0x406cfc`/`0x406d01`/`0x406d03` skip the resolver `0x406e20`
-    /// while it is set. Cleared by [`Self::dismiss`], never by a raise.
-    art_resolved: bool,
     /// Plain black cover with no art or bar, for the world→glue cut; dropped once the state leaves
     /// `InWorld`.
     blackout: bool,
@@ -215,8 +203,6 @@ pub(crate) struct LoadingScreen {
     ready_frames: u32,
     /// Bar fill, 0..1, monotonic within a load: the raw residency ratio dips as the view moves.
     displayed: f32,
-    /// Decoded backdrop art by BLP path.
-    art_cache: HashMap<String, Handle<Image>>,
     /// Which tip the next raise carries, taken by [`crate::game_tip::drive_game_tip`].
     pub(crate) tip_edge: Option<TipEdge>,
     /// Capture only: the clear is skipped while set ([`Self::hold_for_capture`]).
@@ -336,8 +322,6 @@ impl LoadingScreen {
         self.active = false;
         self.blackout = false;
         self.tip_edge = Some(TipEdge::Clear);
-        // `0x407ed7` clears `[0x882e04]`: the next screen resolves its own art.
-        self.art_resolved = false;
         // `0x407f1e`: the route goes with the screen.
         self.set_route(None);
         // `0x407e8d` closes the layer whose flags these are.
@@ -453,15 +437,10 @@ pub(crate) fn add_drive<M>(app: &mut App, after: impl bevy::ecs::schedule::IntoS
     app.add_systems(Update, drive_loading_screen.after(after));
 }
 
-/// Startup: load the LoadingScreens catalog and the bar textures, and spawn the hidden UI tree.
-fn setup_loading_screen(
-    mut commands: Commands,
-    world_assets: Option<ResMut<WorldAssets>>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    // The black root, the bands of a pillarbox or letterbox, spawns unconditionally: `covering()` consumers act as covered while
-    // the screen is active, so missing art must still leave a black cover.
-    let root = commands
+/// Startup: spawn the hidden UI tree.
+fn setup_loading_screen(mut commands: Commands) {
+    // The black root, also the bands of a pillarbox or letterbox.
+    commands
         .spawn((
             LoadingRoot,
             Node {
@@ -477,36 +456,9 @@ fn setup_loading_screen(
             GlobalZIndex(1000),
             Visibility::Hidden,
         ))
-        .id();
-
-    let Some(mut assets) = world_assets else {
-        return;
-    };
-
-    // Catalog (LoadingScreenID → BLP path).
-    match load_loading_screens(&mut assets.chain.lock_recover()) {
-        Ok(c) => {
-            info!("LoadingScreens.dbc: {} screens catalogued", c.len());
-            commands.insert_resource(LoadingScreenCatalogRes(c));
-        }
-        Err(e) => {
-            error!("LoadingScreens.dbc unavailable — plain black cover, no art: {e:#}");
-            return;
-        }
-    }
-
-    // The two layers 1.12 draws, as sRGB clamp sprites, from the archives alone: the loading
-    // screen's `TextureCreate` calls (`0x406891`) pass file flag 0.
-    let mut tex = |path: &str| assets.sprite_texture_opened(path, LooseOpen::Archives, &mut images);
-    let Some(border) = tex("Interface\\Glues\\LoadingBar\\Loading-BarBorder.blp") else {
-        error!("loading bar textures missing — plain black cover, no art");
-        return;
-    };
-    let fill = tex("Interface\\Glues\\LoadingBar\\Loading-BarFill.blp").unwrap_or_default();
-
-    commands.entity(root).with_children(|root| {
+        .with_children(|root| {
         // The fitted rect, centred by the root; [`fit_loading_area`] sizes it each frame. The bar's
-        // fractions are relative to it. Paint order is spawn order: backdrop, tip, fill, border.
+        // fractions are relative to it. Paint order is spawn order: backdrop, tip, track, fill.
         root.spawn((
             LoadingArea,
             Node {
@@ -517,57 +469,42 @@ fn setup_loading_screen(
             },
         ))
         .with_children(|area| {
-            // Tinted black until the art resolves.
             area.spawn((
                 LoadingBackdrop,
-                ImageNode {
-                    color: Color::BLACK,
-                    image_mode: NodeImageMode::Stretch,
-                    ..default()
-                },
                 Node {
                     position_type: PositionType::Absolute,
                     width: Val::Percent(100.0),
                     height: Val::Percent(100.0),
                     ..default()
                 },
+                BackgroundColor(Color::BLACK),
             ));
             // The tip, between the backdrop and the bar as in the reference (`0x406e12`,
             // `0x406e18`), placed by `crate::game_tip` in window terms, as the reference does.
             area.spawn((LoadingTip, crate::game_tip::tip_bundle()));
-            // The fill art is a horizontally uniform gradient, so scaling its width is a reveal.
-            area.spawn((
-                LoadingBarFill,
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Percent(FILL_LEFT * 100.0),
-                    bottom: Val::Percent(FILL_BOTTOM * 100.0),
-                    width: Val::Percent(0.0), // set each frame
-                    height: Val::Percent(FILL_HEIGHT * 100.0),
-                    ..default()
-                },
-                ImageNode {
-                    image: fill,
-                    image_mode: NodeImageMode::Stretch,
-                    ..default()
-                },
-            ));
-            // Border frame, on top.
             area.spawn((
                 LoadingBarBorder,
                 Node {
                     position_type: PositionType::Absolute,
-                    left: Val::Percent(BORDER_LEFT * 100.0),
-                    bottom: Val::Percent(BORDER_BOTTOM * 100.0),
-                    width: Val::Percent(BORDER_WIDTH * 100.0),
-                    height: Val::Percent(BORDER_HEIGHT * 100.0),
+                    left: Val::Percent(BAR_LEFT * 100.0),
+                    bottom: Val::Percent(BAR_BOTTOM * 100.0),
+                    width: Val::Percent(FILL_MAX_WIDTH * 100.0),
+                    height: Val::Percent(BAR_HEIGHT * 100.0),
                     ..default()
                 },
-                ImageNode {
-                    image: border,
-                    image_mode: NodeImageMode::Stretch,
+                BackgroundColor(TRACK_COLOR),
+            ));
+            area.spawn((
+                LoadingBarFill,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Percent(BAR_LEFT * 100.0),
+                    bottom: Val::Percent(BAR_BOTTOM * 100.0),
+                    width: Val::Percent(0.0), // set each frame
+                    height: Val::Percent(BAR_HEIGHT * 100.0),
                     ..default()
                 },
+                BackgroundColor(FILL_COLOR),
             ));
         });
     });
@@ -594,18 +531,16 @@ pub(crate) fn fit_loading_area(
     }
 }
 
-/// Per frame: observe the lifecycle edges, run the raise and clear rules, resolve the backdrop and
-/// set the bar.
+/// Per frame: observe the lifecycle edges, run the raise and clear rules, and set the bar.
 #[allow(clippy::type_complexity)]
 fn drive_loading_screen(
     mut screen: ResMut<LoadingScreen>,
     progress: Res<WorldLoadProgress>,
-    maps: Option<Res<MapCatalogRes>>,
-    screens: Option<Res<LoadingScreenCatalogRes>>,
+    // The route screen's art.
     mut assets: Option<ResMut<WorldAssets>>,
     mut images: ResMut<Assets<Image>>,
     mut root: Query<&mut Visibility, (With<LoadingRoot>, Without<LoadingBackdrop>)>,
-    mut backdrop: Query<(&mut ImageNode, &mut Visibility), With<LoadingBackdrop>>,
+    mut backdrop: Query<&mut Visibility, With<LoadingBackdrop>>,
     mut fill: Query<&mut Node, With<LoadingBarFill>>,
     mut bar_vis: Query<
         &mut Visibility,
@@ -814,7 +749,7 @@ fn drive_loading_screen(
     } else {
         content_vis
     };
-    if let Ok((_, mut vis)) = backdrop.single_mut() {
+    if let Ok(mut vis) = backdrop.single_mut() {
         if *vis != plain_vis {
             *vis = plain_vis;
         }
@@ -826,48 +761,6 @@ fn drive_loading_screen(
     }
     if !screen.active || screen.blackout {
         return;
-    }
-
-    // --- Backdrop art, `0x406cf0`'s gate: the map id is read once per screen to resolve the
-    // texture, so a raise onto a live screen repaints nothing. ---
-    if !screen.art_resolved {
-        // Black, never the last screen's texture (the reference holds a null handle, no quad).
-        if let Ok((mut img, _)) = backdrop.single_mut() {
-            if img.color != Color::BLACK {
-                img.color = Color::BLACK;
-            }
-        }
-        if let (Some(map_id), Some(maps), Some(screens), Some(assets)) =
-            (screen.map, maps.as_ref(), screens.as_ref(), assets.as_mut())
-        {
-            let path = maps
-                .0
-                .loading_screen_id(map_id)
-                .and_then(|id| screens.0.path(id))
-                .map(str::to_string);
-            let handle = path.and_then(|path| match screen.art_cache.get(&path) {
-                Some(h) => Some(h.clone()),
-                // `ResolveLoadingArt` opens the art with file flag 0 (`0x406eba`, `0x406ef1`).
-                None => assets
-                    .sprite_texture_opened(&path, LooseOpen::Archives, &mut images)
-                    .inspect(|h| {
-                        screen.art_cache.insert(path.clone(), h.clone());
-                    }),
-            });
-            match (handle, backdrop.single_mut()) {
-                (Some(handle), Ok((mut img, _))) => {
-                    img.image = handle;
-                    img.color = Color::WHITE; // untint to reveal the art
-                    screen.art_resolved = true;
-                    info!("loading screen: backdrop for map {map_id} resolved");
-                }
-                // No retry: `0x406d0e` writes `-1` into the map id and `0x406cf0` returns on it.
-                _ => {
-                    warn!("loading screen: no backdrop for map {map_id} — plain black this load");
-                    screen.map = None;
-                }
-            }
-        }
     }
 
     // --- Progress bar: zero until the snap lands (residency is still the old place's). ---
@@ -1087,21 +980,11 @@ mod tests {
 
     /// The reference's raises (`0x406640`/`0x4072c0`) store the map id with no guard.
     #[test]
-    fn a_raise_onto_a_live_screen_repoints_the_map_but_never_the_picture() {
+    fn a_raise_onto_a_live_screen_repoints_the_map() {
         let mut screen = LoadingScreen::default();
         screen.raise("world entry", true, Some(33), 0.0);
-        screen.art_resolved = true; // the first plain-draw frame resolved Shadowfang Keep's art
-
         screen.raise("transfer pending", true, Some(389), 0.0);
         assert_eq!(screen.map, Some(389), "the map id is re-pointed, unguarded");
-        assert!(
-            screen.art_resolved,
-            "…and the picture is not: the texture is still the one this screen resolved"
-        );
-
-        // The dismiss is the only thing that lets the next screen resolve its own.
-        screen.dismiss();
-        assert!(!screen.art_resolved);
     }
 
     /// `drive_loading_screen` alone, in world, standing on resident ground at `at` (wow coords).
@@ -1304,7 +1187,7 @@ mod tests {
         let mut app = in_world(GM_ISLAND);
         let backdrop = app
             .world_mut()
-            .spawn((LoadingBackdrop, ImageNode::default(), Visibility::Inherited))
+            .spawn((LoadingBackdrop, Visibility::Inherited))
             .id();
         let bar = app
             .world_mut()
