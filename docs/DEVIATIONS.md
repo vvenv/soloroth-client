@@ -29,7 +29,7 @@ A setting boots at the reference's default unless it is listed here (`docs/METHO
 
 Each entry is the first sentence of a `Deviation:` comment, linking to where it lives.
 
-- [benilla-app](#benilla-app): 259
+- [benilla-app](#benilla-app): 260
 - [benilla-assets](#benilla-assets): 5
 - [benilla-blp](#benilla-blp): 1
 - [benilla-formats](#benilla-formats): 25
@@ -159,6 +159,7 @@ Each entry is the first sentence of a `Deviation:` comment, linking to where it 
 
 - The cover is plain black with a thin flat bar, where the reference paints the map's art (`Map.dbc` → `LoadingScreens.dbc` → BLP, resolved in `0x406e20`) under the two-layer `Loading-BarBorder` / `Loading-BarFill` bar (`0x406891`), because Soloroth wants a quiet cover: the 512×512 art is soft on a modern window and pillarboxed on a wide one. ([`src/loading_screen.rs:4`](../crates/benilla-app/src/loading_screen.rs#L4))
 - The live window's aspect stands in for `gxResolution`'s, as in `portrait`'s `GxAspect`, because the window here takes any shape a drag gives it, where the reference's keeps `gxResolution`'s (`0x5989d7`). In fullscreen the window is the screen in logical pixels and `gxResolution` the screen in device pixels, so their aspects agree and their sizes need not. ([`src/loading_screen.rs:63`](../crates/benilla-app/src/loading_screen.rs#L63))
+- The area is always the whole window, where the reference pillarboxes or letterboxes to 4:3 while `widescreen` is on (`0x406ac9`–`0x406b02`), because with no art to frame the bar and tip centre on the window itself. `widescreen` still sets the tip's wrap (`scaled_aspect`). ([`src/loading_screen.rs:87`](../crates/benilla-app/src/loading_screen.rs#L87))
 - The wheel is swallowed, where the reference still zooms the hidden camera, because nothing should act through the screen. ([`src/loading_screen/input.rs:12`](../crates/benilla-app/src/loading_screen/input.rs#L12))
 - The world pick is cleared, where the reference's freezes: the screen's layer blocks the frame pass (bit 0 clear, `0x406808` → `0x4083c0`), so `0x481790` does not run, except after a transport arrival (`0x5debb6`), when it picks at the frozen point. ([`src/loading_screen/input.rs:14`](../crates/benilla-app/src/loading_screen/input.rs#L14))
 
