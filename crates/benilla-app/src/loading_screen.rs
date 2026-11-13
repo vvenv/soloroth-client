@@ -82,12 +82,11 @@ pub(crate) struct FitRect {
 }
 
 /// The viewport the paint callback `0x406a60` installs (`0x58af60` at `0x406b3d`) for a window of
-/// this size, which the art, the bar and the tip are drawn in.
+/// this size, which the bar and the tip are drawn in.
 ///
-/// Soloroth deviation: the reference pillarboxes / letterboxes to a 4:3 content area when
-/// `widescreen` is on (`0x406ac9`–`0x406b02`). Here the area is always the whole window so the
-/// 16:9 HD loading BLPs in `Data/patch-L.MPQ` fill edge to edge; `widescreen` still drives the
-/// tip's wrap via [`scaled_aspect`].
+/// Deviation: the area is always the whole window, where the reference pillarboxes or letterboxes
+/// to 4:3 while `widescreen` is on (`0x406ac9`–`0x406b02`), because with no art to frame the bar
+/// and tip centre on the window itself. `widescreen` still sets the tip's wrap ([`scaled_aspect`]).
 pub(crate) fn fit_rect(window: Vec2, widescreen: bool) -> FitRect {
     let _ = widescreen;
     FitRect {
