@@ -598,8 +598,8 @@ pub(crate) mod net {
         } = ev
         {
             let has_name = name.is_some();
-            let changed = has_name
-                && name.as_deref() != names.creatures.get(entry).map(|r| r.name.as_str());
+            let changed =
+                has_name && name.as_deref() != names.creatures.get(entry).map(|r| r.name.as_str());
             creature_name(
                 entry,
                 name,

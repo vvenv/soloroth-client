@@ -501,7 +501,10 @@ impl TextEngine {
                     .db()
                     .face(got)
                     .map_or_else(|| format!("{got:?}"), |i| i.post_script_name.clone());
-                let want = self.faces.get(shaping_face).map_or("?", |f| f.path.as_str());
+                let want = self
+                    .faces
+                    .get(shaping_face)
+                    .map_or("?", |f| f.path.as_str());
                 warn!(
                     "ui_text: '{want}' loaded as family {family:?} (weight {}, style {style:?}) \
                      but {ch:?} shaped in {got_name} instead — text in this face draws and \
@@ -1546,9 +1549,15 @@ mod ppem_tests {
         let han = e.char_cell(friz, ppem, '中').expect("shaped").glyphs[0];
         let friz_id = e.faces[friz].id;
         assert_eq!(latin.key.font_id, friz_id, "Latin stays in Friz");
-        assert_ne!(han.key.font_id, friz_id, "a Han character comes from the fallback");
+        assert_ne!(
+            han.key.font_id, friz_id,
+            "a Han character comes from the fallback"
+        );
         assert!(han.px > 0.0, "the fallback glyph advances the pen");
-        assert!(e.glyph_cell(ppem, Bake::ring(0), &han).is_some(), "the fallback glyph has ink");
+        assert!(
+            e.glyph_cell(ppem, Bake::ring(0), &han).is_some(),
+            "the fallback glyph has ink"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

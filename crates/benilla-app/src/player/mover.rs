@@ -127,7 +127,12 @@ pub(super) fn step(
     // settle hold and a root run no substep (`0x634100`). The air nudge is a command too
     // (`0x7c6afc`), so it shapes the box and takes effect in the hang.
     let chair_hold = in_chair && !moving && knockback.is_none();
-    if player.airborne_prev && knockback.is_none() && !player.settling && !chair_hold && !player.modes.rooted {
+    if player.airborne_prev
+        && knockback.is_none()
+        && !player.settling
+        && !chair_hold
+        && !player.modes.rooted
+    {
         let nudge = (moving && !player.arc_dirs_set).then(|| dir.normalize_or_zero() * nudge_speed);
         let (_, mean_vy) = fall_step(player.vel_y, dt, terminal);
         let sweep = super::edge::Sweep::Fall {

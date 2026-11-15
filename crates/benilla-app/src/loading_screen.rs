@@ -456,57 +456,57 @@ fn setup_loading_screen(mut commands: Commands) {
             Visibility::Hidden,
         ))
         .with_children(|root| {
-        // The fitted rect, centred by the root; [`fit_loading_area`] sizes it each frame. The bar's
-        // fractions are relative to it. Paint order is spawn order: backdrop, tip, track, fill.
-        root.spawn((
-            LoadingArea,
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                position_type: PositionType::Relative,
-                ..default()
-            },
-        ))
-        .with_children(|area| {
-            area.spawn((
-                LoadingBackdrop,
+            // The fitted rect, centred by the root; [`fit_loading_area`] sizes it each frame. The bar's
+            // fractions are relative to it. Paint order is spawn order: backdrop, tip, track, fill.
+            root.spawn((
+                LoadingArea,
                 Node {
-                    position_type: PositionType::Absolute,
                     width: Val::Percent(100.0),
                     height: Val::Percent(100.0),
+                    position_type: PositionType::Relative,
                     ..default()
                 },
-                BackgroundColor(Color::BLACK),
-            ));
-            // The tip, between the backdrop and the bar as in the reference (`0x406e12`,
-            // `0x406e18`), placed by `crate::game_tip` in window terms, as the reference does.
-            area.spawn((LoadingTip, crate::game_tip::tip_bundle()));
-            area.spawn((
-                LoadingBarBorder,
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Percent(BAR_LEFT * 100.0),
-                    bottom: Val::Percent(BAR_BOTTOM * 100.0),
-                    width: Val::Percent(FILL_MAX_WIDTH * 100.0),
-                    height: Val::Percent(BAR_HEIGHT * 100.0),
-                    ..default()
-                },
-                BackgroundColor(TRACK_COLOR),
-            ));
-            area.spawn((
-                LoadingBarFill,
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Percent(BAR_LEFT * 100.0),
-                    bottom: Val::Percent(BAR_BOTTOM * 100.0),
-                    width: Val::Percent(0.0), // set each frame
-                    height: Val::Percent(BAR_HEIGHT * 100.0),
-                    ..default()
-                },
-                BackgroundColor(FILL_COLOR),
-            ));
+            ))
+            .with_children(|area| {
+                area.spawn((
+                    LoadingBackdrop,
+                    Node {
+                        position_type: PositionType::Absolute,
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    BackgroundColor(Color::BLACK),
+                ));
+                // The tip, between the backdrop and the bar as in the reference (`0x406e12`,
+                // `0x406e18`), placed by `crate::game_tip` in window terms, as the reference does.
+                area.spawn((LoadingTip, crate::game_tip::tip_bundle()));
+                area.spawn((
+                    LoadingBarBorder,
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(BAR_LEFT * 100.0),
+                        bottom: Val::Percent(BAR_BOTTOM * 100.0),
+                        width: Val::Percent(FILL_MAX_WIDTH * 100.0),
+                        height: Val::Percent(BAR_HEIGHT * 100.0),
+                        ..default()
+                    },
+                    BackgroundColor(TRACK_COLOR),
+                ));
+                area.spawn((
+                    LoadingBarFill,
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(BAR_LEFT * 100.0),
+                        bottom: Val::Percent(BAR_BOTTOM * 100.0),
+                        width: Val::Percent(0.0), // set each frame
+                        height: Val::Percent(BAR_HEIGHT * 100.0),
+                        ..default()
+                    },
+                    BackgroundColor(FILL_COLOR),
+                ));
+            });
         });
-    });
 }
 
 /// Per frame: the content area is the window's [`fit_rect`], so a resize during a load refits the

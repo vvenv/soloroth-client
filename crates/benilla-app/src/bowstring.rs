@@ -33,7 +33,10 @@ pub(crate) struct StringTip {
 }
 
 impl StringTip {
-    pub(crate) fn new(skeleton: &benilla_assets::ModelSkeleton, (bone, model): (u16, Vec3)) -> Self {
+    pub(crate) fn new(
+        skeleton: &benilla_assets::ModelSkeleton,
+        (bone, model): (u16, Vec3),
+    ) -> Self {
         Self {
             bone,
             model,
