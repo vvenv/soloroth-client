@@ -300,9 +300,13 @@ pub(crate) fn recipe_at(model: &Model, index: usize) -> Option<&TradeSkillRecipe
 }
 
 /// `GetFirstTradeSkill` (`0x5001c0`): the first displayed row with a spell id above 0, as an
-/// index, 0 when none (`0x5001d5`-`0x5001f6`).
+/// index, 0 when none (`0x5001d5`-`0x5001f6`). A build that leaves with a product in flight keeps
+/// the last sort's displayed count over the recipes alone (`0x4fcf34`), so the scan stops at the
+/// rows the array holds.
 pub(super) fn first_recipe_index(model: &Model) -> u32 {
-    rows(model)[..num_rows(model)]
+    let rows = rows(model);
+    let shown = num_rows(model).min(rows.len());
+    rows[..shown]
         .iter()
         .position(|r| matches!(r, Row::Entry(_)))
         .map_or(0, |p| (p + 1) as u32)

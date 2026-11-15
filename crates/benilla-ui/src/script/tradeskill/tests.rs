@@ -1540,6 +1540,22 @@ fn a_rebuild_with_a_product_in_flight_signals_nothing() {
     assert_eq!(s.eval::<i64>("return N").unwrap(), 1);
 }
 
+/// A product in flight leaves the last sort's displayed count over the recipes alone
+/// (`0x4fcf34`). `GetFirstTradeSkill` scans that count (`0x5001d5`) and stops at the array.
+#[test]
+fn first_recipe_stops_at_the_array_when_the_displayed_count_is_stale() {
+    let mut s = UiScript::new().unwrap();
+    s.set_trade_skill(Some(two_recipe_state()));
+    assert_eq!(s.eval::<i64>("return GetNumTradeSkills()").unwrap(), 3);
+    let mut st = two_recipe_state();
+    st.recipes[1].icon_pending = Some(st.recipes[1].product_item);
+    s.set_trade_skill(Some(st));
+    assert_eq!(s.eval::<i64>("return GetNumTradeSkills()").unwrap(), 3);
+    assert_eq!(s.model_ref().trade_skill_rows.len(), 2);
+    // Add order, the sort having been skipped: the first recipe is row 1.
+    assert_eq!(s.eval::<i64>("return GetFirstTradeSkill()").unwrap(), 1);
+}
+
 /// A rebuild with flag 1 resets the subclass and fold masks first (`0x4fcae2`, `0x4fcae8`) and
 /// restores the saved flags only past the pending exit (`0x4fcf3a`), so with a product in flight
 /// the folds and the filters are lost.
