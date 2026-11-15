@@ -1510,13 +1510,25 @@ fn disengage_look(rig: &mut CameraControl, window: &mut Window, cursor_opts: &mu
 fn take_cursor(rig: &mut CameraControl, window: &Window, cursor_opts: &mut CursorOptions) {
     rig.cursor_stash = window.cursor_position();
     cursor_opts.grab_mode = CursorGrabMode::Locked;
-    cursor_opts.visible = false;
+    // macOS hides in `cursor`: writing `visible` makes winit invalidate cursor rects,
+    // and AppKit then replaces the gauntlet with the arrow or a blank cursor.
+    set_pointer_visible(cursor_opts, false);
 }
 
-/// Unlock and show the cursor; on macOS hiding is the cursor subsystem's job.
+/// Unlock and show the cursor. On macOS the cursor driver shows it (`cursor`).
 fn release_cursor(cursor_opts: &mut CursorOptions) {
     cursor_opts.grab_mode = CursorGrabMode::None;
-    cursor_opts.visible = true;
+    set_pointer_visible(cursor_opts, true);
+}
+
+/// `CursorOptions.visible`, except on macOS, where [`crate::cursor`] owns the pointer.
+fn set_pointer_visible(cursor_opts: &mut CursorOptions, visible: bool) {
+    #[cfg(target_os = "macos")]
+    let _ = (cursor_opts, visible);
+    #[cfg(not(target_os = "macos"))]
+    {
+        cursor_opts.visible = visible;
+    }
 }
 
 /// Hand the OS cursor back while the window is unfocused and take it again on focus, without

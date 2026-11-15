@@ -198,7 +198,6 @@ mod tests {
         ("world_state_ui.rs", "defense_channel"),
         // The cursor systems on both platforms track OS cursor state, which outlives the VM.
         ("cursor.rs", "was_looking"),
-        ("cursor.rs", "rects_disabled"),
         ("cursor.rs", "decode_failed"),
         ("cursor.rs", "last_set"),
         ("cursor.rs", "last_ptr"),

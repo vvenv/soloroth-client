@@ -3,9 +3,10 @@
 //! icon replaces it, composited to 32×32 (`0x523840`) and uploaded the same way (`0x523790`).
 //!
 //! On macOS winit's cursor-rect route reverts to the arrow on every mouse move under a
-//! continuously redrawing Metal view, so this builds an `NSCursor` per mode, disables the window's
-//! cursor rects and sets the cursor directly; mouselook uses `NSCursor::hide`/`unhide`. Elsewhere
-//! winit's `CursorIcon::Custom` works and hide-on-look is `CursorOptions.visible`.
+//! continuously redrawing Metal view, so this builds an `NSCursor` per mode, keeps cursor rects
+//! disabled (AppKit turns them back on), and sets the cursor directly; mouselook uses
+//! `NSCursor::hide`/`unhide`. Elsewhere winit's `CursorIcon::Custom` works and hide-on-look is
+//! `CursorOptions.visible`.
 //!
 //! The pointer's visibility is one flag on the device (`[dev+0x2880]`, stored by `0x595c20`), and
 //! the last call of `0x58b590` wins ([`PointerDevice`]).
@@ -670,8 +671,8 @@ mod macos {
         world.insert_non_send_resource(NativeCursors(cursors));
     }
 
-    /// Disable the window's cursor rects once, set the payload or mode cursor while not looking,
-    /// and hide or unhide it across mouselook.
+    /// Keep cursor rects off, set the payload or mode cursor while not looking, and hide or
+    /// unhide it across mouselook.
     pub(super) fn drive(
         cursors: Option<NonSend<NativeCursors>>,
         mut payload_cursors: NonSendMut<PayloadCursors>,
@@ -686,7 +687,6 @@ mod macos {
         // The `Local`s below remember OS state, which outlives the VM, so none is a
         // [`crate::ui_script::VmMemo`].
         mut was_looking: Local<bool>,
-        mut rects_disabled: Local<bool>,
         mut decode_failed: Local<HashSet<String>>,
         mut last_set: Local<Option<String>>,
         // The last `set` cursor's pointer, the drift baseline; only compared, never dereferenced.
@@ -721,8 +721,9 @@ mod macos {
                 }
             }
         }
-        // The device's one flag decides (`0x595c20`). `CursorOptions.visible` is inert here, so
-        // AppKit's hide and unhide run on its edges only, which keeps the counter balanced.
+        // The device's one flag decides (`0x595c20`). The look does not write
+        // `CursorOptions.visible`: winit would invalidate cursor rects and AppKit would put the
+        // arrow back. Hide and unhide run on the flag's edges, so the counter stays balanced.
         let looking = device.hides(super::look_released(Some(&*rig)));
         let stem = mode.0.stem();
         // Mode 41 shows the picture `SetCursor` loaded, built from its path on first use.
@@ -771,16 +772,10 @@ mod macos {
         // SAFETY: main thread, guaranteed by the `NonSend` params; hide and unhide stay balanced
         // across the look transition.
         unsafe {
-            if !*rects_disabled {
-                if let Some(mtm) = MainThreadMarker::new() {
-                    if let Some(window) = NSApplication::sharedApplication(mtm)
-                        .windows()
-                        .firstObject()
-                    {
-                        window.disableCursorRects();
-                        *rects_disabled = true;
-                    }
-                }
+            // A resize, a fullscreen change or `resetCursorRects` turns rects back on, and the
+            // next mouse move then sets the arrow. Disabling them does not restore our cursor.
+            if suppress_cursor_rects() {
+                *last_set = None;
             }
             if looking && !*was_looking {
                 NSCursor::hide();
@@ -813,6 +808,28 @@ mod macos {
             }
         }
         *was_looking = looking;
+    }
+
+    /// Turn cursor rects off on every app window that has them. Returns whether any were on.
+    ///
+    /// `resetCursorRects` (resize, fullscreen, a rect invalidate) enables them again, and a mouse
+    /// move then sets the arrow over the gauntlet. One window is not enough: `windows` is not
+    /// ordered, so the first object is not the game window.
+    fn suppress_cursor_rects() -> bool {
+        let Some(mtm) = MainThreadMarker::new() else {
+            return false;
+        };
+        let windows = NSApplication::sharedApplication(mtm).windows();
+        let mut suppressed = false;
+        for i in 0..windows.count() {
+            // SAFETY: `i` is in range, and this runs on the main thread (`MainThreadMarker`).
+            let window = unsafe { windows.objectAtIndex(i) };
+            if unsafe { window.areCursorRectsEnabled() } {
+                unsafe { window.disableCursorRects() };
+                suppressed = true;
+            }
+        }
+        suppressed
     }
 
     /// RGBA → `NSCursor`, via PNG and `NSImage::initWithData`.

@@ -185,6 +185,15 @@ fn cursor(world: &mut World) -> CursorOptions {
         .clone()
 }
 
+/// The look hid the pointer. On macOS `visible` stays set: writing it makes winit re-enable
+/// cursor rects, and the gauntlet driver hides with `NSCursor` instead.
+fn assert_look_hides(c: &CursorOptions) {
+    #[cfg(target_os = "macos")]
+    assert!(c.visible);
+    #[cfg(not(target_os = "macos"))]
+    assert!(!c.visible);
+}
+
 /// The stock binding of a button run as the world frame's slot runs it, with no host lent: `BUTTON1`
 /// runs `CAMERAORSELECTORMOVE`, `BUTTON2` `TURNORACTION`, and the bodies' calls reach the bindings'
 /// state as the dispatch's tail hands them over.
@@ -321,7 +330,7 @@ fn mouselook_start_turns_the_camera_and_the_character_with_no_button_held() {
     );
     let c = cursor(&mut w);
     assert_eq!(c.grab_mode, CursorGrabMode::Locked);
-    assert!(!c.visible);
+    assert_look_hides(&c);
     assert!(is_mouselooking(&mut w));
 
     // It holds with no button while the mouse keeps moving.
@@ -430,7 +439,7 @@ fn a_freelook_left_inside_its_call_gives_the_cursor_back_at_the_frame() {
     frame(&mut w, 0.0);
     let c = cursor(&mut w);
     assert_eq!(c.grab_mode, CursorGrabMode::Locked);
-    assert!(!c.visible);
+    assert_look_hides(&c);
     w.query::<&mut Window>()
         .single_mut(&mut w)
         .unwrap()
@@ -637,7 +646,7 @@ fn a_session_survives_focus_loss(start: impl Fn(&mut World)) {
     frame(&mut w, 40.0);
     let c = cursor(&mut w);
     assert_eq!(c.grab_mode, CursorGrabMode::Locked);
-    assert!(!c.visible);
+    assert_look_hides(&c);
     assert!(w.resource::<CameraControl>().holds_cursor());
     assert_eq!(
         yaw(&mut w),
