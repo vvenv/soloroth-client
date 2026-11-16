@@ -135,7 +135,7 @@ pub(super) fn measure_render(
             ..Default::default()
         }),
     );
-    // A 16-slot empty backpack, as every character has: with 0 slots a bag addon draws a window
+    // A 16-slot empty backpack: with 0 slots a bag addon draws a window
     // with no slots, the very failure this column catches.
     script.set_container(
         0,

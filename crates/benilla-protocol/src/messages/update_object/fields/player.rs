@@ -163,9 +163,19 @@ impl ObjectFields {
     pub fn player_inv_slot(&self, i: u8) -> Option<u64> {
         (i < 23).then(|| self.get_guid(FIELD_PLAYER_INV_SLOT_HEAD + 2 * u16::from(i)))?
     }
-    /// `PLAYER_FIELD_PACK_SLOT_1 + 2i`: our backpack's 16 item guids.
+    /// Backpack guid `i`. The first 16 are `PLAYER_FIELD_PACK_SLOT_1 + 2i`.
+    /// Deviation: the backpack is 32 slots. 1.12's pack block is 16 guids, and the
+    /// keyring block is 32 guids of which the server only fills the first 16, so
+    /// slots 16..31 are keyring indices 16..31 (wire slots 97..112). The field
+    /// layout does not move.
     pub fn player_pack_slot(&self, i: u8) -> Option<u64> {
-        (i < 16).then(|| self.get_guid(FIELD_PLAYER_PACK_SLOT_1 + 2 * u16::from(i)))?
+        if i < 16 {
+            self.get_guid(FIELD_PLAYER_PACK_SLOT_1 + 2 * u16::from(i))
+        } else if i < 32 {
+            self.player_keyring_slot(i)
+        } else {
+            None
+        }
     }
     /// `PLAYER_FIELD_BANK_SLOT_1 + 2i`: our bank's 24 item guids.
     pub fn player_bank_slot(&self, i: u8) -> Option<u64> {

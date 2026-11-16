@@ -47,8 +47,20 @@ use feed::{feed_item_stats, feed_random_properties};
 pub(crate) use requirements::RequirementsLive;
 pub(crate) use sets::ItemSetLive;
 
-/// The backpack's capacity (`PLAYER_FIELD_PACK_SLOT_1..`).
-pub(super) const PACK_SLOTS: u8 = 16;
+/// The backpack's capacity. Deviation: 32, twice 1.12's 16. Slots past 16 are the
+/// unused half of the keyring update block (wire 97..112); see `player_pack_slot`.
+pub(super) const PACK_SLOTS: u8 = 32;
+
+/// Wire player-slot of backpack index `i` (0-based). The first 16 are 23..38.
+/// Deviation: the rest are 97..112, `KEYRING_SLOT_FIRST + i`.
+pub(super) fn pack_wire_slot(i: u8) -> u8 {
+    if i < 16 {
+        SLOT_PACK_FIRST + i
+    } else {
+        KEYRING_SLOT_FIRST + i
+    }
+}
+
 /// Worn equipment, `INV_SLOT` 0..18 (head through tabard): the first region of the walker
 /// `0x622420`.
 pub(super) const EQUIPMENT_SLOTS: u8 = 19;
@@ -101,7 +113,7 @@ pub(crate) fn keyring_size(level: u32) -> u32 {
 pub(crate) fn wire_pos(bag: i64, slot1: u32) -> Option<(u8, u8)> {
     let slot0 = u8::try_from(slot1.checked_sub(1)?).ok()?;
     match bag {
-        0 if slot0 < PACK_SLOTS => Some((BAG_PLAYER_INVENTORY, SLOT_PACK_FIRST + slot0)),
+        0 if slot0 < PACK_SLOTS => Some((BAG_PLAYER_INVENTORY, pack_wire_slot(slot0))),
         1..=4 if slot0 < 36 => Some((SLOT_BAG_FIRST + (bag as u8 - 1), slot0)),
         BANK_CONTAINER if slot0 < BANK_SLOTS => {
             Some((BAG_PLAYER_INVENTORY, BANK_SLOT_FIRST + slot0))
@@ -324,7 +336,7 @@ fn walk_inventory<T>(
         for i in 0..PACK_SLOTS {
             let guid = store.player_pack_slot(i).unwrap_or(0);
             if guid != 0 {
-                if let Some(hit) = visit(BAG_PLAYER_INVENTORY, SLOT_PACK_FIRST + i, guid) {
+                if let Some(hit) = visit(BAG_PLAYER_INVENTORY, pack_wire_slot(i), guid) {
                     return Some(hit);
                 }
             }
@@ -354,7 +366,7 @@ fn walk_inventory<T>(
         }
     }
     if scope.keyring {
-        // The addressable 16; the reference walks all 32, but the rest are always empty.
+        // The addressable 16. Keyring indices 16..31 are the backpack's extra slots.
         for i in 0..KEYRING_SLOTS {
             let guid = store.player_keyring_slot(i).unwrap_or(0);
             if guid != 0 {
@@ -1506,6 +1518,13 @@ mod tests {
             wire_pos(0, 1).map(|(b, _)| b),
             wire_pos(EQUIPMENT_BAG, 1).map(|(b, _)| b)
         );
+        // Backpack slots 1..16 are player slots 23..38. Slots 17..32 are 97..112,
+        // the unused half of the keyring update block.
+        assert_eq!(wire_pos(0, 1), Some((255, 23)));
+        assert_eq!(wire_pos(0, 16), Some((255, 38)));
+        assert_eq!(wire_pos(0, 17), Some((255, 97)));
+        assert_eq!(wire_pos(0, 32), Some((255, 112)));
+        assert_eq!(wire_pos(0, 33), None);
     }
 
     #[test]
